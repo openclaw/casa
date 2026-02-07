@@ -73,7 +73,7 @@ struct ApiDocsView: View {
             Text("Scene Filter")
                 .font(.headline)
             Picker("Scene", selection: $selectedSceneId) {
-                Text("All scenes").tag(Optional<UUID>.none)
+                Text("All scenes").tag(Optional(SceneSelection.allScenesId))
                 ForEach(scenes, id: \.uniqueIdentifier) { scene in
                     Text(scene.name).tag(Optional(scene.uniqueIdentifier))
                 }
@@ -89,7 +89,7 @@ struct ApiDocsView: View {
     }
 
     private var selectedScene: HMActionSet? {
-        guard let selectedSceneId else { return nil }
+        guard let selectedSceneId, selectedSceneId != SceneSelection.allScenesId else { return nil }
         return scenes.first { $0.uniqueIdentifier == selectedSceneId }
     }
 
