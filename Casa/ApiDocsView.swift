@@ -6,14 +6,20 @@ struct ApiDocsView: View {
     @EnvironmentObject private var model: CasaAppModel
     @ObservedObject private var settings = CasaSettings.shared
     let accessories: [HMAccessory]
+    let scenes: [HMActionSet]
     @Binding var selectedAccessoryId: UUID?
+    @Binding var selectedSceneId: UUID?
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 header
                 if settings.homeKitEnabled {
-                    accessoryFilter
+                    if selectedSceneId != nil {
+                        sceneFilter
+                    } else {
+                        accessoryFilter
+                    }
                 } else {
                     Text("HomeKit module is disabled. Enable it in Settings to view HomeKit endpoints.")
                         .font(.caption)
@@ -62,6 +68,31 @@ struct ApiDocsView: View {
         }
     }
 
+    private var sceneFilter: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Scene Filter")
+                .font(.headline)
+            Picker("Scene", selection: $selectedSceneId) {
+                Text("All scenes").tag(Optional<UUID>.none)
+                ForEach(scenes, id: \.uniqueIdentifier) { scene in
+                    Text(scene.name).tag(Optional(scene.uniqueIdentifier))
+                }
+            }
+            .pickerStyle(.menu)
+
+            if let scene = selectedScene {
+                Text("Filtering examples for \(scene.name)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+
+    private var selectedScene: HMActionSet? {
+        guard let selectedSceneId else { return nil }
+        return scenes.first { $0.uniqueIdentifier == selectedSceneId }
+    }
+
     private var baseURL: String {
         "http://127.0.0.1:\(settings.port)"
     }
@@ -82,6 +113,7 @@ struct ApiDocsView: View {
         let boolBody = "{\"value\": true}"
         let accessoryId = selectedAccessory?.uniqueIdentifier.uuidString ?? "<id>"
         let characteristicId = selectedCharacteristicId ?? "<uuid>"
+        let sceneId = selectedScene?.uniqueIdentifier.uuidString ?? "<id>"
         var result: [ApiEndpoint] = [
             ApiEndpoint(
                 method: "GET",
@@ -94,72 +126,105 @@ struct ApiDocsView: View {
 
         guard settings.homeKitEnabled else { return result }
 
-        result.append(contentsOf: [
-            ApiEndpoint(
-                method: "GET",
-                path: "/homekit/accessories",
-                description: "List all accessories",
-                curl: "curl \(baseURL)/homekit/accessories\(authHeader)",
-                response: "[{\"id\": \"...\", \"name\": \"...\"}]"
-            ),
-            ApiEndpoint(
-                method: "GET",
-                path: "/homekit/rooms",
-                description: "List all rooms",
-                curl: "curl \(baseURL)/homekit/rooms\(authHeader)",
-                response: "[{\"id\": \"...\", \"name\": \"...\"}]"
-            ),
-            ApiEndpoint(
-                method: "GET",
-                path: "/homekit/services",
-                description: "List all services",
-                curl: "curl \(baseURL)/homekit/services\(authHeader)",
-                response: "[{\"id\": \"...\", \"name\": \"...\"}]"
-            ),
-            ApiEndpoint(
-                method: "GET",
-                path: "/homekit/accessories/:id",
-                description: "Fetch one accessory with services",
-                curl: "curl \(baseURL)/homekit/accessories/\(accessoryId)\(authHeader)",
-                response: "{\"id\": \"...\", \"services\": []}"
-            ),
-            ApiEndpoint(
-                method: "GET",
-                path: "/homekit/characteristics/:id",
-                description: "Read a characteristic",
-                curl: "curl \(baseURL)/homekit/characteristics/\(characteristicId)\(authHeader)",
-                response: "{\"id\": \"...\", \"value\": true}"
-            ),
-            ApiEndpoint(
-                method: "PUT",
-                path: "/homekit/characteristics/:id",
-                description: "Write a characteristic (writable only; read-only returns 405)",
-                curl: "curl -X PUT \(baseURL)/homekit/characteristics/\(characteristicId)\(authHeader) -H 'Content-Type: application/json' -d '\(boolBody)'",
-                request: boolBody,
-                response: "{\"status\": \"queued\"}"
-            ),
-            ApiEndpoint(
-                method: "GET",
-                path: "/homekit/schema",
-                description: "Discover writable characteristics and metadata",
-                curl: "curl \(baseURL)/homekit/schema\(authHeader)",
-                response: "[{\"id\": \"...\", \"writable\": true, \"valueType\": \"bool\"}]"
-            ),
-            ApiEndpoint(
-                method: "GET",
-                path: "/homekit/cameras",
-                description: "List cameras",
-                curl: "curl \(baseURL)/homekit/cameras\(authHeader)",
-                response: "[{\"id\": \"...\", \"name\": \"...\"}]"
-            ),
-            ApiEndpoint(
-                method: "GET",
-                path: "/homekit/cameras/:id",
-                description: "Fetch one camera",
-                curl: "curl \(baseURL)/homekit/cameras/<id>\(authHeader)",
-                response: "{\"id\": \"...\", \"name\": \"...\"}"
-            )
-        ])
+        if selectedSceneId != nil {
+            result.append(contentsOf: [
+                ApiEndpoint(
+                    method: "GET",
+                    path: "/homekit/scenes",
+                    description: "List all scenes",
+                    curl: "curl \(baseURL)/homekit/scenes\(authHeader)",
+                    response: "[{\"id\": \"...\", \"name\": \"...\", \"type\": \"...\"}]"
+                ),
+                ApiEndpoint(
+                    method: "POST",
+                    path: "/homekit/scenes/:id/execute",
+                    description: "Execute a scene",
+                    curl: "curl -X POST \(baseURL)/homekit/scenes/\(sceneId)/execute\(authHeader)",
+                    response: "{\"name\": \"...\", \"status\": \"executed\"}"
+                )
+            ])
+        } else {
+            result.append(contentsOf: [
+                ApiEndpoint(
+                    method: "GET",
+                    path: "/homekit/accessories",
+                    description: "List all accessories",
+                    curl: "curl \(baseURL)/homekit/accessories\(authHeader)",
+                    response: "[{\"id\": \"...\", \"name\": \"...\"}]"
+                ),
+                ApiEndpoint(
+                    method: "GET",
+                    path: "/homekit/rooms",
+                    description: "List all rooms",
+                    curl: "curl \(baseURL)/homekit/rooms\(authHeader)",
+                    response: "[{\"id\": \"...\", \"name\": \"...\"}]"
+                ),
+                ApiEndpoint(
+                    method: "GET",
+                    path: "/homekit/services",
+                    description: "List all services",
+                    curl: "curl \(baseURL)/homekit/services\(authHeader)",
+                    response: "[{\"id\": \"...\", \"name\": \"...\"}]"
+                ),
+                ApiEndpoint(
+                    method: "GET",
+                    path: "/homekit/accessories/:id",
+                    description: "Fetch one accessory with services",
+                    curl: "curl \(baseURL)/homekit/accessories/\(accessoryId)\(authHeader)",
+                    response: "{\"id\": \"...\", \"services\": []}"
+                ),
+                ApiEndpoint(
+                    method: "GET",
+                    path: "/homekit/characteristics/:id",
+                    description: "Read a characteristic",
+                    curl: "curl \(baseURL)/homekit/characteristics/\(characteristicId)\(authHeader)",
+                    response: "{\"id\": \"...\", \"value\": true}"
+                ),
+                ApiEndpoint(
+                    method: "PUT",
+                    path: "/homekit/characteristics/:id",
+                    description: "Write a characteristic (writable only; read-only returns 405)",
+                    curl: "curl -X PUT \(baseURL)/homekit/characteristics/\(characteristicId)\(authHeader) -H 'Content-Type: application/json' -d '\(boolBody)'",
+                    request: boolBody,
+                    response: "{\"status\": \"queued\"}"
+                ),
+                ApiEndpoint(
+                    method: "GET",
+                    path: "/homekit/schema",
+                    description: "Discover writable characteristics and metadata",
+                    curl: "curl \(baseURL)/homekit/schema\(authHeader)",
+                    response: "[{\"id\": \"...\", \"writable\": true, \"valueType\": \"bool\"}]"
+                ),
+                ApiEndpoint(
+                    method: "GET",
+                    path: "/homekit/scenes",
+                    description: "List all scenes",
+                    curl: "curl \(baseURL)/homekit/scenes\(authHeader)",
+                    response: "[{\"id\": \"...\", \"name\": \"...\", \"type\": \"...\"}]"
+                ),
+                ApiEndpoint(
+                    method: "POST",
+                    path: "/homekit/scenes/:id/execute",
+                    description: "Execute a scene",
+                    curl: "curl -X POST \(baseURL)/homekit/scenes/<id>/execute\(authHeader)",
+                    response: "{\"name\": \"...\", \"status\": \"executed\"}"
+                ),
+                ApiEndpoint(
+                    method: "GET",
+                    path: "/homekit/cameras",
+                    description: "List cameras",
+                    curl: "curl \(baseURL)/homekit/cameras\(authHeader)",
+                    response: "[{\"id\": \"...\", \"name\": \"...\"}]"
+                ),
+                ApiEndpoint(
+                    method: "GET",
+                    path: "/homekit/cameras/:id",
+                    description: "Fetch one camera",
+                    curl: "curl \(baseURL)/homekit/cameras/<id>\(authHeader)",
+                    response: "{\"id\": \"...\", \"name\": \"...\"}"
+                )
+            ])
+        }
 
         return result
     }

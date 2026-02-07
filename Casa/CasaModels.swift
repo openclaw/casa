@@ -50,3 +50,11 @@ struct CasaCamera {
     let accessoryId: String
     let name: String
 }
+
+struct CasaScene {
+    let id: String
+    let name: String
+    let homeId: String
+    let type: String
+    let isExecuting: Bool
+}
