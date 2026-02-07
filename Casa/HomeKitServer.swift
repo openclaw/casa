@@ -170,6 +170,15 @@ final class HomeKitServer: ObservableObject {
             let accessories = await MainActor.run { self.homeKit.accessories }
             response = ok(HomeKitPayload.accessories(HomeKitMapper.accessories(from: accessories)))
 
+        case ("GET", "/homekit/scenes"):
+            guard homeKitEnabled else {
+                response = error(403, "module_disabled", "HomeKit module disabled")
+                break
+            }
+            let scenes = await MainActor.run { self.homeKit.scenes }
+            let homes = await MainActor.run { self.homeKit.homes }
+            response = ok(HomeKitPayload.scenes(HomeKitMapper.scenes(from: scenes, homes: homes)))
+
         case ("GET", _):
             if let accessoryId = request.pathParameter(prefix: "/homekit/accessories/") {
                 guard homeKitEnabled else {
@@ -243,6 +252,45 @@ final class HomeKitServer: ObservableObject {
                 break
             }
             response = error(404, "not_found", "Route not found")
+
+        case ("POST", _):
+            if let sceneId = request.pathParameter(prefix: "/homekit/scenes/"),
+               sceneId.hasSuffix("/execute") {
+                let id = String(sceneId.dropLast("/execute".count))
+                guard homeKitEnabled else {
+                    response = error(403, "module_disabled", "HomeKit module disabled")
+                    break
+                }
+                guard let (home, actionSet) = await MainActor.run(body: { self.homeKit.scene(with: id) }) else {
+                    response = error(404, "not_found", "Scene not found")
+                    break
+                }
+                do {
+                    try await self.homeKit.executeScene(home, actionSet: actionSet)
+                    logger.log(level: "info", message: "scene_executed", metadata: [
+                        "id": id,
+                        "name": actionSet.name
+                    ])
+                    response = ok(.object([
+                        "status": .string("executed"),
+                        "name": .string(actionSet.name)
+                    ]))
+                } catch {
+                    logger.log(level: "error", message: "scene_execute_failed", metadata: [
+                        "id": id,
+                        "error": error.localizedDescription
+                    ])
+                    response = HTTPResponse.error(
+                        status: 500,
+                        code: "execute_failed",
+                        message: error.localizedDescription,
+                        requestId: requestId,
+                        started: started
+                    )
+                }
+                break
+            }
+            fallthrough
 
         case ("POST", "/homekit/characteristic"):
             guard homeKitEnabled else {
@@ -831,6 +879,18 @@ enum HomeKitPayload {
         ])
     }
 
+    static func scenes(_ scenes: [CasaScene]) -> JSONValue {
+        .array(scenes.map { scene in
+            .object([
+                "id": .string(scene.id),
+                "name": .string(scene.name),
+                "homeId": .string(scene.homeId),
+                "type": .string(scene.type),
+                "isExecuting": .bool(scene.isExecuting)
+            ])
+        })
+    }
+
     static func schema(_ accessories: [CasaAccessory]) -> JSONValue {
         let entries = accessories.flatMap { accessory in
             accessory.services.flatMap { service in
@@ -977,6 +1037,19 @@ private enum HomeKitMapper {
             metadata: metadata,
             value: valueOverride ?? characteristic.value
         )
+    }
+
+    static func scenes(from scenes: [HMActionSet], homes: [HMHome]) -> [CasaScene] {
+        scenes.map { scene in
+            let homeId = homes.first { $0.actionSets.contains(scene) }?.uniqueIdentifier.uuidString ?? ""
+            return CasaScene(
+                id: scene.uniqueIdentifier.uuidString,
+                name: scene.name,
+                homeId: homeId,
+                type: scene.actionSetType,
+                isExecuting: scene.isExecuting
+            )
+        }
     }
 
     static func cameras(from cameras: [HMCameraProfile]) -> [CasaCamera] {

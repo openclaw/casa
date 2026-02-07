@@ -5,6 +5,7 @@ struct ContentView: View {
     @EnvironmentObject private var model: CasaAppModel
     @State private var mainSelection: MainSelection = .apiDocs
     @State private var accessorySelection: UUID? = nil
+    @State private var sceneSelection: UUID? = nil
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -25,12 +26,26 @@ struct ContentView: View {
         .animation(.easeOut(duration: 0.2), value: model.toastMessage)
     }
 
-    private var selectionBinding: Binding<UUID?> {
+    private var accessoryBinding: Binding<UUID?> {
         Binding<UUID?>(
             get: { accessorySelection },
             set: { newValue in
                 accessorySelection = newValue
                 if newValue != nil {
+                    sceneSelection = nil
+                    mainSelection = .apiDocs
+                }
+            }
+        )
+    }
+
+    private var sceneBinding: Binding<UUID?> {
+        Binding<UUID?>(
+            get: { sceneSelection },
+            set: { newValue in
+                sceneSelection = newValue
+                if newValue != nil {
+                    accessorySelection = nil
                     mainSelection = .apiDocs
                 }
             }
@@ -62,9 +77,11 @@ struct ContentView: View {
     private var apiDocsView: some View {
         HStack(spacing: 0) {
             if model.settings.homeKitEnabled {
-                AccessorySidebarView(
+                SidebarView(
                     accessories: model.homeKit.accessories,
-                    selection: $accessorySelection
+                    scenes: model.homeKit.scenes,
+                    accessorySelection: accessoryBinding,
+                    sceneSelection: sceneBinding
                 )
                 .frame(minWidth: 220, idealWidth: 240, maxWidth: 300)
                 .background(Color(UIColor.systemGroupedBackground))
@@ -74,7 +91,9 @@ struct ContentView: View {
 
             ApiDocsView(
                 accessories: model.homeKit.accessories,
-                selectedAccessoryId: selectionBinding
+                scenes: model.homeKit.scenes,
+                selectedAccessoryId: accessoryBinding,
+                selectedSceneId: sceneBinding
             )
         }
     }
@@ -108,11 +127,14 @@ private enum MainSelection: Hashable {
 }
 
 
-private struct AccessorySidebarView: View {
+private struct SidebarView: View {
+    static let allScenesId = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
     @EnvironmentObject private var model: CasaAppModel
     @ObservedObject private var settings = CasaSettings.shared
     let accessories: [HMAccessory]
-    @Binding var selection: UUID?
+    let scenes: [HMActionSet]
+    @Binding var accessorySelection: UUID?
+    @Binding var sceneSelection: UUID?
 
     var body: some View {
         List {
@@ -141,17 +163,39 @@ private struct AccessorySidebarView: View {
 
             Section("Accessories") {
                 Button {
-                    selection = nil
+                    accessorySelection = nil
+                    sceneSelection = nil
                 } label: {
-                    accessoryRow(title: "All accessories", isSelected: selection == nil)
+                    sidebarRow(title: "All accessories", isSelected: accessorySelection == nil && sceneSelection == nil)
                 }
                 .buttonStyle(.plain)
 
                 ForEach(accessories, id: \.uniqueIdentifier) { accessory in
                     Button {
-                        selection = accessory.uniqueIdentifier
+                        accessorySelection = accessory.uniqueIdentifier
+                        sceneSelection = nil
                     } label: {
-                        accessoryRow(title: accessory.name, isSelected: selection == accessory.uniqueIdentifier)
+                        sidebarRow(title: accessory.name, isSelected: accessorySelection == accessory.uniqueIdentifier)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            Section("Scenes") {
+                Button {
+                    sceneSelection = SidebarView.allScenesId
+                    accessorySelection = nil
+                } label: {
+                    sidebarRow(title: "All scenes", isSelected: sceneSelection == SidebarView.allScenesId)
+                }
+                .buttonStyle(.plain)
+
+                ForEach(scenes, id: \.uniqueIdentifier) { scene in
+                    Button {
+                        sceneSelection = scene.uniqueIdentifier
+                        accessorySelection = nil
+                    } label: {
+                        sidebarRow(title: scene.name, isSelected: sceneSelection == scene.uniqueIdentifier)
                     }
                     .buttonStyle(.plain)
                 }
@@ -160,7 +204,7 @@ private struct AccessorySidebarView: View {
         .listStyle(.insetGrouped)
     }
 
-    private func accessoryRow(title: String, isSelected: Bool) -> some View {
+    private func sidebarRow(title: String, isSelected: Bool) -> some View {
         HStack {
             Text(title)
                 .foregroundColor(.primary)

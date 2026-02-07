@@ -35,6 +35,32 @@ final class HomeKitManager: NSObject, ObservableObject {
         ])
     }
 
+    var scenes: [HMActionSet] {
+        manager.homes.flatMap { $0.actionSets }
+    }
+
+    func scene(with idString: String) -> (HMHome, HMActionSet)? {
+        guard let id = UUID(uuidString: idString) else { return nil }
+        for home in manager.homes {
+            if let scene = home.actionSets.first(where: { $0.uniqueIdentifier == id }) {
+                return (home, scene)
+            }
+        }
+        return nil
+    }
+
+    func executeScene(_ home: HMHome, actionSet: HMActionSet) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            home.executeActionSet(actionSet) { error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume()
+                }
+            }
+        }
+    }
+
     func characteristic(with id: UUID) -> HMCharacteristic? {
         for home in manager.homes {
             for accessory in home.accessories {
