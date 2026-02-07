@@ -128,7 +128,6 @@ private enum MainSelection: Hashable {
 
 
 private struct SidebarView: View {
-    static let allScenesId = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
     @EnvironmentObject private var model: CasaAppModel
     @ObservedObject private var settings = CasaSettings.shared
     let accessories: [HMAccessory]
@@ -183,10 +182,10 @@ private struct SidebarView: View {
 
             Section("Scenes") {
                 Button {
-                    sceneSelection = SidebarView.allScenesId
+                    sceneSelection = SceneSelection.allScenesId
                     accessorySelection = nil
                 } label: {
-                    sidebarRow(title: "All scenes", isSelected: sceneSelection == SidebarView.allScenesId)
+                    sidebarRow(title: "All scenes", isSelected: sceneSelection == SceneSelection.allScenesId)
                 }
                 .buttonStyle(.plain)
 
