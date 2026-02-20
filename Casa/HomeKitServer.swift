@@ -793,7 +793,12 @@ enum JSONValue: Encodable {
     func encodedData() -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        return (try? encoder.encode(self)) ?? Data("null".utf8)
+        do {
+            return try encoder.encode(self)
+        } catch {
+            print("[Casa] JSON encoding failed: \(error)")
+            return Data("null".utf8)
+        }
     }
 }
 
@@ -954,7 +959,9 @@ enum HomeKitPayload {
             if CFGetTypeID(number) == CFBooleanGetTypeID() {
                 return .bool(number.boolValue)
             }
-            return .number(number.doubleValue)
+            let d = number.doubleValue
+            if d.isNaN || d.isInfinite { return .null }
+            return .number(d)
         case let string as String:
             return .string(string)
         case let date as Date:
