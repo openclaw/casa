@@ -106,6 +106,49 @@ final class CasaTests: XCTestCase {
         XCTAssertEqual(entry?["maxValue"] as? Double, 100)
     }
 
+    func testSchemaMapsNonFiniteNumbersToNull() throws {
+        let metadata = CasaCharacteristicMetadata(
+            format: HMCharacteristicMetadataFormatFloat,
+            minValue: Double.nan,
+            maxValue: Double.infinity,
+            stepValue: -Double.infinity,
+            validValues: [Double.nan, 1],
+            units: ""
+        )
+        let characteristic = CasaCharacteristic(
+            id: "char-3",
+            type: "type-3",
+            properties: ["read"],
+            metadata: metadata,
+            value: Double.nan
+        )
+        let service = CasaService(
+            id: "svc-3",
+            name: "Service",
+            type: "type",
+            accessoryId: "acc-3",
+            characteristics: [characteristic]
+        )
+        let accessory = CasaAccessory(
+            id: "acc-3",
+            name: "Accessory",
+            category: "Category",
+            room: "Room",
+            hasCameraProfile: false,
+            services: [service]
+        )
+
+        let data = HomeKitPayload.schema([accessory]).encodedData()
+        let json = try JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+        let entry = json?.first
+        XCTAssertTrue(entry?["minValue"] is NSNull)
+        XCTAssertTrue(entry?["maxValue"] is NSNull)
+        XCTAssertTrue(entry?["stepValue"] is NSNull)
+        let validValues = entry?["validValues"] as? [Any]
+        XCTAssertTrue(validValues?.first is NSNull)
+        XCTAssertEqual(validValues?.last as? Double, 1)
+    }
+
     func testSettingsDefaultsAreOff() throws {
         let suiteName = "casa.tests.defaults.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
