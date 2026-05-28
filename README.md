@@ -1,6 +1,6 @@
-![Casa banner](docs/assets/readme-banner.jpg)
-
 # Casa
+
+![Casa banner](docs/assets/readme-banner.jpg)
 
 ![Casa](Casa/Assets.xcassets/AppIcon.appiconset/AppIcon1024.png)
 
